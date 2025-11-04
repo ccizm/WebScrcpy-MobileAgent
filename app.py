@@ -1,13 +1,80 @@
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit, send
 from scrcpy import Scrcpy
+from adb_manager import ADBManager
 import argparse
 import queue
+import atexit
 
-scpy_ctx = None
+# 设备管理器
+class DeviceManager:
+    def __init__(self):
+        self.devices = {}  # 存储所有连接的设备
+        self.adb_manager = ADBManager()
+
+    def add_device(self, device_id, state="device"):
+        # 检查设备是否已存在
+        if device_id not in self.devices:
+            self.devices[device_id] = {
+                "id": device_id,
+                "state": state,
+                "is_mirroring": False,
+                "scrcpy": None
+            }
+            return True
+        return False
+
+    def remove_device(self, device_id):
+        if device_id in self.devices:
+            if self.devices[device_id]["scrcpy"]:
+                self.devices[device_id]["scrcpy"].scrcpy_stop()
+            del self.devices[device_id]
+
+    def start_mirror(self, device_id, callback):
+        if device_id in self.devices and not self.devices[device_id]["is_mirroring"]:
+            scpy = Scrcpy()
+            scpy.device_id = device_id  # 设置设备ID
+            if scpy.scrcpy_start(callback, video_bit_rate):
+                self.devices[device_id]["scrcpy"] = scpy
+                self.devices[device_id]["is_mirroring"] = True
+                return True
+            else:
+                print(f"Failed to start scrcpy for device {device_id}")
+        return False
+
+    def stop_mirror(self, device_id):
+        if device_id in self.devices and self.devices[device_id]["is_mirroring"]:
+            self.devices[device_id]["scrcpy"].scrcpy_stop()
+            self.devices[device_id]["scrcpy"] = None
+            self.devices[device_id]["is_mirroring"] = False
+            return True
+        return False
+
+    def get_device_list(self):
+        return [
+            {
+                "id": d["id"],
+                "state": d["state"],
+                "is_mirroring": d["is_mirroring"]
+            }
+            for d in self.devices.values()
+        ]
+
+    def cleanup(self):
+        for device_id in list(self.devices.keys()):
+            self.remove_device(device_id)
+        self.adb_manager.disconnect_device()
+
 client_sid = None
 message_queue = queue.Queue()
 video_bit_rate = "1024000"
+device_manager = DeviceManager()
+
+# 注册退出时的清理函数
+def cleanup_on_exit():
+    device_manager.cleanup()
+
+atexit.register(cleanup_on_exit)
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
@@ -19,10 +86,11 @@ def index():
 
 def video_send_task():
     global client_sid
-    while client_sid != None:
+    while client_sid is not None:
         try:
             message = message_queue.get(timeout=0.01)
-            socketio.emit('video_data', message, to=client_sid)
+            if client_sid:  # 确保客户端仍然连接
+                socketio.emit('video_data', message, to=client_sid)
         except queue.Empty:
             pass
         except Exception as e:
@@ -32,36 +100,123 @@ def video_send_task():
     print(f"video_send_task stopped")
 
 def send_video_data(data):
-    message_queue.put(data)
+    if not message_queue.full():
+        message_queue.put(data)
 
 @socketio.on('connect')
 def handle_connect():
-    global scpy_ctx, client_sid
+    global client_sid
     print('Client connected')
+    client_sid = request.sid
+    # 发送当前设备列表
+    emit('device_list_update', device_manager.get_device_list())
+    return True
 
-    if scpy_ctx is not None:
-        print(f'reject connection, client {scpy_ctx} is already connected')
-        return False
-    else:
-        client_sid = request.sid
-        scpy_ctx = Scrcpy()
-        scpy_ctx.scrcpy_start(send_video_data, video_bit_rate)
+@socketio.on('connect_device')
+def handle_device_connect(data):
+    try:
+        ip = data.get('ip')
+        port = int(data.get('port', 5555))
+        device_id = f"{ip}:{port}"
+        
+        # 检查设备是否已连接
+        if device_id in device_manager.devices:
+            emit('connection_error', f'设备 {device_id} 已连接')
+            return
+        
+        # 尝试连接设备
+        print(f'Trying to connect to device: {device_id}')
+        success, output = device_manager.adb_manager.connect_to_device(ip, port)
+        if success:
+            if device_manager.add_device(device_id):
+                emit('device_list_update', device_manager.get_device_list())
+                print(f'Device connected successfully: {device_id}')
+            else:
+                device_manager.adb_manager.disconnect_device(ip, port)
+                emit('connection_error', '设备添加失败')
+        else:
+            safe_output = (output or '').strip()
+            emit('connection_error', f'无法连接到设备 {device_id}: {safe_output}')
+    except Exception as e:
+        print(f"Connection error: {str(e)}")
+        emit('connection_error', f'连接错误: {str(e)}')
+
+@socketio.on('disconnect_device')
+def handle_device_disconnect(data):
+    device_id = data.get('device_id')
+    if device_id in device_manager.devices:
+        device_manager.remove_device(device_id)
+        device_manager.adb_manager.disconnect_device(
+            *device_id.split(':') if ':' in device_id else (device_id, None)
+        )
+        emit('device_list_update', device_manager.get_device_list())
+        print(f'Device disconnected: {device_id}')
+
+@socketio.on('start_mirror')
+def handle_start_mirror(data):
+    device_id = data.get('device_id')
+    # 若已有其他设备在镜像，先关闭它们
+    try:
+        for did, info in list(device_manager.devices.items()):
+            if info["is_mirroring"] and did != device_id:
+                device_manager.stop_mirror(did)
+                emit('mirror_stopped', {'device_id': did})
+        # 更新设备列表（状态变更）
+        emit('device_list_update', device_manager.get_device_list())
+    except Exception as e:
+        print(f"Error stopping previous mirrors: {e}")
+
+    if device_manager.start_mirror(device_id, send_video_data):
         socketio.start_background_task(video_send_task)
-        print(f'connectioned, client  {scpy_ctx}')
+        emit('device_list_update', device_manager.get_device_list())
+        emit('mirror_started', {'device_id': device_id})
+    else:
+        emit('mirror_error', '启动镜像失败')
+
+@socketio.on('stop_mirror')
+def handle_stop_mirror(data):
+    device_id = data.get('device_id')
+    if device_manager.stop_mirror(device_id):
+        emit('device_list_update', device_manager.get_device_list())
+        emit('mirror_stopped', {'device_id': device_id})
+    else:
+        emit('mirror_error', '停止镜像失败')
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    global scpy_ctx, client_sid
+    global client_sid
     client_sid = None
-    print('Client disconnected', {scpy_ctx})
-    scpy_ctx.scrcpy_stop()
-    scpy_ctx = None
-    print('scrcpy stopped, client {scpy_ctx}')
+    print('Client disconnected')
+    # 停止所有正在镜像的设备
+    for device_id in list(device_manager.devices.keys()):
+        if device_manager.devices[device_id]["is_mirroring"]:
+            device_manager.stop_mirror(device_id)
+    print('Session cleaned up')
 
 @socketio.on('control_data')
 def handle_control_data(data):
-    global scpy_ctx
-    scpy_ctx.scrcpy_send_control(data)
+    print(f"Received control data: {data}")  # 添加调试信息
+    device_id = data.get('device_id')
+    if device_id and device_id in device_manager.devices:
+        device_info = device_manager.devices[device_id]
+        if device_info["is_mirroring"] and device_info["scrcpy"]:
+            try:
+                control_data = data.get('data')
+                if control_data:
+                    print(f"Sending control data to device {device_id}: {len(control_data)} bytes")  # 调试信息
+                    device_info["scrcpy"].scrcpy_send_control(control_data)
+                    print("Control data sent successfully")  # 调试信息
+                else:
+                    print("No control data found in request")  # 调试信息
+            except Exception as e:
+                print(f"Error sending control data: {e}")
+                emit('control_error', f'发送控制数据失败: {e}')
+        else:
+            print(f"Device {device_id} is not mirroring or scrcpy instance not found")  # 调试信息
+            emit('control_error', '设备未在镜像状态')
+    else:
+        print(f"Device {device_id} not found in device manager")  # 调试信息
+        emit('control_error', '设备未找到')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Web server for scrcpy')

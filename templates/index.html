@@ -4,16 +4,55 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link href="/static/css/font-awesome.min.css" rel="stylesheet">
-    <title>Web server for scrcpy</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <title>scrcpy Web服务</title>
     <style>
         body {
             margin: 0;
             height: 100vh;
             display: flex;
-            flex-direction: column;
             overflow: hidden;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+
+        .sidebar {
+            width: 350px;
+            background: #ffffff;
+            border-right: 1px solid #ddd;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            transition: width 0.25s ease;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .sidebar-header h2 {
+            margin: 0;
+            color: #333;
+            font-size: 18px;
+        }
+
+        .sidebar-content {
+            flex: 1;
+            padding: 20px;
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
             background-color: #333;
+            position: relative;
         }
 
         .video-wrapper {
@@ -31,34 +70,196 @@
             max-height: 100%;
             width: auto;
             height: auto;
-            background: black;
+            background: #333;
         }
 
-        #status {
-            font-family: Arial, sans-serif;
+        .device-section {
+            margin-bottom: 30px;
+        }
+
+        .device-section h3 {
+            margin: 0 0 15px 0;
             color: #333;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .device-list-content {
+            max-height: 50vh;
+            overflow-y: auto;
+            border-radius: 6px;
+            background: #f8f9fa;
+        }
+
+        /* 根据设备方向调整布局（不再改变侧边栏宽度，避免抖动） */
+        body.orientation-landscape .sidebar {
+            width: 350px;
+        }
+        body.orientation-portrait .sidebar {
+            width: 350px;
+        }
+        /* 视频适配增强 */
+        video {
+            object-fit: contain;
+        }
+
+        /* 设备项样式 */
+        .device-item {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+        }
+        .device-info {
+            display: flex;
+            flex-direction: column;
+        }
+        .device-name {
+            font-weight: 600;
+            color: #222;
+        }
+        .device-meta {
+            color: #666;
+            font-size: 0.9em;
+        }
+        .device-actions {
+            display: flex;
+            gap: 10px;
+        }
+        .device-actions button {
+            font-size: 13px;
+        }
+
+        .connection-form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }   
+
+        .status-text {
+            margin: 15px 0 0 0;
+            color: #666;
+            font-size: 14px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            border-left: 4px solid #007bff;
         }
 
         .icon-container {
             display: flex;
-            gap: 10px;
-            width: 100%;
+            gap: 15px;
+            padding: 15px 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border-top: 1px solid #555;
         }
 
         .icon {
-            padding: 6px;
-            font-size: 18px;
+            padding: 8px;
+            font-size: 20px;
             cursor: pointer;
             color: #eee;
             transition: color 0.3s ease;
+            border-radius: 4px;
         }
 
         .icon:hover {
             color: #007BFF;
+            background: rgba(255, 255, 255, 0.1);
         }
 
         .icon-container i:nth-child(4) {
             margin-left: auto;
+        }
+
+        /* 折叠态样式 */
+        body.sidebar-collapsed .sidebar {
+            width: 0;
+            border: none;
+            overflow: hidden;
+        }
+        body.sidebar-collapsed .sidebar-header,
+        body.sidebar-collapsed .sidebar-content {
+            display: none;
+        }
+
+        /* 侧边栏切换按钮 */
+        .sidebar-toggle-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: #fff;
+            color: #333;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .sidebar-toggle-btn:hover {
+            background: #f0f0f0;
+        }
+
+        /* 悬浮展开按钮 */
+        .sidebar-fab {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            z-index: 1000;
+            width: 38px;
+            height: 38px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            border-radius: 19px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            border: 1px solid #ddd;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+            cursor: pointer;
+        }
+        body.sidebar-collapsed .sidebar-fab { display: inline-flex; }
+
+        @media (max-width: 768px) {
+            body {
+                flex-direction: column;
+            }
+            .sidebar {
+                width: 100%;
+                height: auto;
+                max-height: 40vh;
+            }
+            body.sidebar-collapsed .sidebar {
+                display: none; /* 移动端直接隐藏 */
+            }
+        }
+
+        @media (max-width: 768px) {
+            body { flex-direction: column; }
+
+            /* 移动端使用全屏覆盖的抽屉式侧边栏 */
+            .sidebar {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                max-height: none;
+                z-index: 1000;
+                box-shadow: 2px 0 12px rgba(0,0,0,0.2);
+                transform: translateX(-100%);
+                transition: transform 0.25s ease;
+            }
+            /* 展开时从左侧滑入，覆盖全屏 */
+            body:not(.sidebar-collapsed) .sidebar {
+                transform: translateX(0);
+            }
+
+            .main-content { flex: 1; }
+
+            /* 折叠态时显示悬浮展开按钮 */
+            body.sidebar-collapsed .sidebar-fab { display: inline-flex; }
         }
     </style>
     <script src="/static/js/socket.io.js"></script>
@@ -66,54 +267,253 @@
     <script src="/static/js/exp-golomb.js"></script>
     <script src="/static/js/h264-sps-parser.js"></script>
     <script src="/static/js/video_parser.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </head>
 
 <body>
-    <p id="status" style="display: none;">connecting to device...</p>
-    <div class="icon-container">
-        <i id="power-icon" class="fa-solid fa-power-off icon"></i>
-        <i id="volume-down-icon" class="fa-solid fa-volume-down icon"></i>
-        <i id="volume-up-icon" class="fa-solid fa-volume-up icon"></i>
-        <i id="back-icon" class="fa-solid fa-arrow-left icon"></i>
-        <i id="home-icon" class="fa-solid fa-house icon"></i>
-        <i id="menu-icon" class="fa-solid fa-bars icon"></i>
+    <!-- 左侧边栏 -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h2 class="m-0">设备管理</h2>
+            <button id="sidebar-collapse-btn" class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-1" title="收起侧边栏">
+                <i class="bi bi-chevron-left"></i>
+                收起
+            </button>
+        </div>
+        <div class="sidebar-content">
+            <!-- 连接新设备 -->
+            <div class="device-section">
+                <h3>连接新设备</h3>
+                <div class="connection-form">
+                    <div class="row g-2 align-items-center">
+                        <div class="col">
+                            <input type="text" id="device-ip" placeholder="设备地址（IP或域名）" class="form-control">
+                        </div>
+                        <div class="col-auto" style="width: 100px;">
+                            <input type="number" id="device-port" value="5555" class="form-control">
+                        </div>
+                    </div>
+                    <button id="connect-btn" class="btn btn-primary mt-2">连接设备</button>
+                </div>
+                <!-- 状态提示改为右上角 Toasts 展示 -->
+                <p id="screen-size" class="status-text" style="border-left-color:#6c757d;">屏幕尺寸：未知</p>
+            </div>
+
+            <!-- 设备列表 -->
+            <div class="device-section">
+                <h3>已连接的设备</h3>
+                <div id="device-list-content" class="device-list-content list-group">
+                    <div class="list-group-item py-2"><small class="text-muted">正在加载设备列表...</small></div>
+                </div>
+            </div>
+        </div>
     </div>
-    <div class="video-wrapper">
-        <video id="player" autoplay muted webkit-playsinline playsinline x5-playsinline></video>
+
+    <!-- 右侧主内容区域 -->
+    <div class="main-content">
+        <div class="video-wrapper">
+            <video id="player" autoplay muted webkit-playsinline playsinline x5-playsinline tabindex="0"></video>
+            <button id="sidebar-fab" class="sidebar-fab" title="展开侧边栏">
+                <i class="bi bi-chevron-right"></i>
+            </button>
+        </div>
+        <!-- Bootstrap Toast 容器（右上角） -->
+        <div class="position-fixed top-0 end-0 p-3" style="z-index: 1080;">
+            <div id="toast-container"></div>
+        </div>
+        <!-- 兼容旧逻辑的隐藏状态元素，防止第三方代码或旧事件访问为空 -->
+        <p id="status" class="visually-hidden"></p>
+        
+        <!-- 控制按钮 -->
+        <div class="icon-container btn-toolbar justify-content-center gap-2 p-2" style="display: none;">
+            <div class="btn-group btn-group-sm" role="group">
+                <button id="power-btn" class="btn btn-outline-light" title="电源"><i class="bi bi-power"></i></button>
+                <button id="volume-down-btn" class="btn btn-outline-light" title="音量-"><i class="bi bi-volume-down"></i></button>
+                <button id="volume-up-btn" class="btn btn-outline-light" title="音量+"><i class="bi bi-volume-up"></i></button>
+                <button id="back-btn" class="btn btn-outline-light" title="返回"><i class="bi bi-arrow-left"></i></button>
+                <button id="home-btn" class="btn btn-outline-light" title="主页"><i class="bi bi-house"></i></button>
+                <button id="menu-btn" class="btn btn-outline-light" title="菜单"><i class="bi bi-list"></i></button>
+            </div>
+        </div>
     </div>
     <script src="/static/js/jmuxer.min.js"></script>
     <script>
         const videoElement = document.getElementById('player');
-        const jmuxer = new JMuxer({
-            node: 'player',
-            mode: 'video',
-            flushingTime: 0,
-            fps: 60,
-            clearBuffer: true,
-            onReady: () => {
-                document.getElementById('status').textContent = 'MSE done, waiting for data...';
-                if (videoElement) {
-                    videoElement.controls = false;
-                    videoElement.style.cssText = `
-                        -webkit-media-controls: none !important;
-                        -webkit-media-controls-enclosure: none !important;
-                        -webkit-media-controls-panel: none !important;
-                        -webkit-media-controls-play-button: none !important;
-                        -webkit-media-controls-timeline: none !important;
-                        -webkit-media-controls-current-time-display: none !important;
-                        -webkit-media-controls-time-remaining-display: none !important;
-                        -webkit-media-controls-mute-button: none !important;
-                        -webkit-media-controls-volume-slider: none !important;
-                        -webkit-media-controls-fullscreen-button: none !important;
-                        -moz-controls: none !important;
-                        -ms-media-controls: none !important;
-                    `;
+        const sidebarCollapseBtn = document.getElementById('sidebar-collapse-btn');
+        const sidebarFabBtn = document.getElementById('sidebar-fab');
+        const sidebarEl = document.querySelector('.sidebar');
+        let jmuxerReady = false;
+        let lastInit = null; // 暂存SPS/PPS以避免初始化丢失
+        let currentScreenWidth = null;
+        let currentScreenHeight = null;
+        const screenSizeText = document.getElementById('screen-size');
+        let awaitingKeyframe = false; // 重建后等待首个IDR再开始喂帧
+        let hasStartedStream = false; // 区分首次启动与中途分辨率变化
+        // 最大缩放百分比，防止视频铺满导致页面抖动（相对容器尺寸）
+        const maxScalePercent = { width: 0.95, height: 0.95 };
+        // 不同方向的显示缩放比例（可根据需要调整）
+        const orientationScale = { landscape: 1.0, portrait: 0.9 };
+
+        function updateVideoDisplay(w, h) {
+            try {
+                const container = document.querySelector('.video-wrapper');
+                if (!container || !videoElement || !w || !h) return;
+                const cw = container.clientWidth;
+                const ch = container.clientHeight;
+                if (cw <= 0 || ch <= 0) return;
+
+                const videoAspect = w / h;
+                const containerAspect = cw / ch;
+                const orientation = w >= h ? 'landscape' : 'portrait';
+                const scale = Math.min(Math.max(orientationScale[orientation] || 1.0, 0.5), 1.0);
+                const maxW = Math.floor(cw * (maxScalePercent.width || 1.0));
+                const maxH = Math.floor(ch * (maxScalePercent.height || 1.0));
+
+                if (videoAspect >= containerAspect) {
+                    // 以容器宽度为限制，按比例缩放高度，并限制最大百分比
+                    const targetWidth = Math.min(Math.floor(cw * scale), maxW);
+                    const targetHeight = Math.floor(targetWidth / videoAspect);
+                    videoElement.style.width = targetWidth + 'px';
+                    videoElement.style.height = targetHeight + 'px';
+                } else {
+                    // 以容器高度为限制，按比例缩放宽度，并限制最大百分比
+                    const targetHeight = Math.min(Math.floor(ch * scale), maxH);
+                    const targetWidth = Math.floor(targetHeight * videoAspect);
+                    videoElement.style.height = targetHeight + 'px';
+                    videoElement.style.width = targetWidth + 'px';
                 }
-            },
-            onError: (err) => {
-                document.getElementById('status').textContent = 'MSE Error: ' + err.message;
+                // 额外设置最大边界，防止极端情况下溢出
+                videoElement.style.maxWidth = maxW + 'px';
+                videoElement.style.maxHeight = maxH + 'px';
+            } catch (e) {
+                console.warn('updateVideoDisplay error:', e);
             }
-        });
+        }
+
+        function updateOrientationClass(w, h) {
+            const isLandscape = w >= h;
+            document.body.classList.toggle('orientation-landscape', isLandscape);
+            document.body.classList.toggle('orientation-portrait', !isLandscape);
+        }
+
+        function updateScreenSizeLabel(w, h) {
+            if (screenSizeText) {
+                const orientation = w >= h ? '横向' : '纵向';
+                screenSizeText.textContent = `屏幕尺寸：${w} x ${h}（${orientation}）`;
+            }
+        }
+
+        // 侧边栏折叠/展开
+        function applySidebarState(collapsed) {
+            document.body.classList.toggle('sidebar-collapsed', collapsed);
+            try {
+                localStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0');
+            } catch (e) {}
+            if (currentScreenWidth && currentScreenHeight) {
+                updateVideoDisplay(currentScreenWidth, currentScreenHeight);
+            }
+        }
+        function collapseSidebar() { applySidebarState(true); }
+        function expandSidebar() { applySidebarState(false); }
+        // 初始化状态
+        (function initSidebarState(){
+            const isMobile = window.matchMedia('(max-width: 768px)').matches;
+            try {
+                const saved = localStorage.getItem('sidebarCollapsed');
+                if (saved === null && isMobile) {
+                    // 移动端默认折叠，点击悬浮按钮再展开为全屏覆盖抽屉
+                    applySidebarState(true);
+                } else {
+                    applySidebarState(saved === '1');
+                }
+            } catch (e) {
+                // 失败时移动端默认折叠，桌面端默认不折叠
+                applySidebarState(isMobile ? true : false);
+            }
+        })();
+        // 事件绑定
+        if (sidebarCollapseBtn) {
+            sidebarCollapseBtn.addEventListener('click', () => collapseSidebar());
+        }
+        if (sidebarFabBtn) {
+            sidebarFabBtn.addEventListener('click', () => expandSidebar());
+        }
+
+        function createJMuxer() {
+            return new JMuxer({
+                node: 'player',
+                mode: 'video',
+                flushingTime: 0,
+                fps: 60,
+                clearBuffer: true,
+                onReady: () => {
+                    try {
+                        jmuxerReady = true;
+                        showToast('MSE 初始化完成，等待数据...', 'success');
+                        if (videoElement) {
+                            videoElement.controls = false;
+                            videoElement.style.cssText = `
+                                -webkit-media-controls: none !important;
+                                -webkit-media-controls-enclosure: none !important;
+                                -webkit-media-controls-panel: none !important;
+                                -webkit-media-controls-play-button: none !important;
+                                -webkit-media-controls-timeline: none !important;
+                                -webkit-media-controls-current-time-display: none !important;
+                                -webkit-media-controls-time-remaining-display: none !important;
+                                -webkit-media-controls-mute-button: none !important;
+                                -webkit-media-controls-volume-slider: none !important;
+                                -webkit-media-controls-fullscreen-button: none !important;
+                                -moz-controls: none !important;
+                                -ms-media-controls: none !important;
+                            `;
+                        }
+                        // 如果此前握有SPS/PPS，准备好后立刻喂入
+                        if (lastInit) {
+                            try {
+                                jmuxer.feed({ video: lastInit["sps"] });
+                                jmuxer.feed({ video: lastInit["pps"] });
+                                // 主动触发播放，实际开始需等待关键帧
+                                videoElement.play().catch(() => {});
+                                hasStartedStream = true;
+                                lastInit = null;
+                            } catch (e) {
+                                console.warn('Feed init on ready error:', e);
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('onReady handler error:', e);
+                    }
+                },
+                onError: (err) => {
+                    showToast('MSE 错误: ' + err.message, 'danger');
+                }
+            });
+        }
+        let jmuxer = createJMuxer();
+        function showToast(message, type = 'info') {
+            try {
+                const container = document.getElementById('toast-container');
+                if (!container) return;
+                const valid = ['primary','secondary','success','danger','warning','info','light','dark'];
+                const tone = valid.includes(type) ? type : 'info';
+                const el = document.createElement('div');
+                el.className = `toast align-items-center text-bg-${tone} border-0 mb-2`;
+                el.setAttribute('role', 'alert');
+                el.setAttribute('aria-live', 'assertive');
+                el.setAttribute('aria-atomic', 'true');
+                el.innerHTML = `
+                    <div class=\"d-flex\">
+                        <div class=\"toast-body\">${message}</div>
+                        <button type=\"button\" class=\"btn-close btn-close-white me-2 m-auto\" data-bs-dismiss=\"toast\" aria-label=\"Close\"></button>
+                    </div>`;
+                container.appendChild(el);
+                const toast = new bootstrap.Toast(el, { delay: 3000 });
+                el.addEventListener('hidden.bs.toast', () => el.remove());
+                toast.show();
+            } catch (e) {
+                console.warn('Toast show error:', e);
+            }
+        }
 
         const socket = io({
             reconnection: false,
@@ -121,101 +521,443 @@
         });
 
         var input = null;
+        var currentMirroringDevice = null;  // 跟踪当前正在镜像的设备
+        let pendingDisconnectAfterStop = new Set(); // 标记需在停止镜像后断开连接的设备
+        let pendingStopTimers = new Map(); // 设备停止镜像的超时定时器
+        let controlsBound = false; // 防止重复绑定控制按钮事件
+
+        function resetPlayer() {
+            try {
+                if (jmuxer && typeof jmuxer.destroy === 'function') {
+                    jmuxer.destroy();
+                }
+            } catch (e) {
+                console.warn('JMuxer reset error:', e);
+            }
+            jmuxer = null;
+            jmuxerReady = false;
+            lastInit = null;
+            try {
+                if (videoElement) {
+                    videoElement.pause();
+                    videoElement.removeAttribute('src');
+                    videoElement.load();
+                }
+            } catch (e) {
+                console.warn('Video element reset error:', e);
+            }
+        }
+        
         function initInput(width, height) {
             function input_data_cb(data) {
-                socket.emit('control_data', data);
+                if (currentMirroringDevice) {
+                    socket.emit('control_data', {
+                        device_id: currentMirroringDevice,
+                        data: data
+                    });
+                } else {
+                    console.warn('No device is currently mirroring');
+                }
             }
 
             input = new ScrcpyInput(input_data_cb, videoElement, width, height, false);
+            
+            // 设置视频元素焦点以接收键盘事件
+            videoElement.focus();
 
-            const powerIcon = document.getElementById('power-icon');
-            const volumeDownIcon = document.getElementById('volume-down-icon');
-            const volumeUpIcon = document.getElementById('volume-up-icon');
-            const backUpIcon = document.getElementById('back-icon');
-            const homeUpIcon = document.getElementById('home-icon');
-            const menuUpIcon = document.getElementById('menu-icon');
+            if (!controlsBound) {
+                const powerBtn = document.getElementById('power-btn');
+                const volumeDownBtn = document.getElementById('volume-down-btn');
+                const volumeUpBtn = document.getElementById('volume-up-btn');
+                const backBtn = document.getElementById('back-btn');
+                const homeBtn = document.getElementById('home-btn');
+                const menuBtn = document.getElementById('menu-btn');
 
-            powerIcon.addEventListener('mousedown', function () {
-                input.screen_on_off(0);
-            });
-            powerIcon.addEventListener('mouseup', function () {
-                input.screen_on_off(1);
-            });
+                powerBtn.addEventListener('mousedown', function () {
+                    input.screen_on_off(0);
+                });
+                powerBtn.addEventListener('mouseup', function () {
+                    input.screen_on_off(1);
+                });
 
-            volumeDownIcon.addEventListener('mousedown', (event) => {
-                input.snedKeyCode(event, 0, 25);
-            });
-            volumeDownIcon.addEventListener('mouseup', (event) => {
-                input.snedKeyCode(event, 1, 25);
-            });
+                volumeDownBtn.addEventListener('mousedown', (event) => {
+                    input.snedKeyCode(event, 0, 25);
+                });
+                volumeDownBtn.addEventListener('mouseup', (event) => {
+                    input.snedKeyCode(event, 1, 25);
+                });
+                volumeUpBtn.addEventListener('mousedown', (event) => {
+                    input.snedKeyCode(event, 0, 24);
+                });
+                volumeUpBtn.addEventListener('mouseup', (event) => {
+                    input.snedKeyCode(event, 1, 24);
+                });
+                backBtn.addEventListener('mousedown', (event) => {
+                    input.snedKeyCode(event, 0, 4);
+                });
+                backBtn.addEventListener('mouseup', (event) => {
+                    input.snedKeyCode(event, 1, 4);
+                });
+                homeBtn.addEventListener('mousedown', (event) => {
+                    input.snedKeyCode(event, 0, 3);
+                });
+                homeBtn.addEventListener('mouseup', (event) => {
+                    input.snedKeyCode(event, 1, 3);
+                });
+                menuBtn.addEventListener('mousedown', (event) => {
+                    input.snedKeyCode(event, 0, 187);
+                });
+                menuBtn.addEventListener('mouseup', (event) => {
+                    input.snedKeyCode(event, 1, 187);
+                });
 
-            volumeUpIcon.addEventListener('mousedown', (event) => {
-                input.snedKeyCode(event, 0, 24);
-            });
-            volumeUpIcon.addEventListener('mouseup', (event) => {
-                input.snedKeyCode(event, 1, 24);
-            });
-
-            backUpIcon.addEventListener('mousedown', (event) => {
-                input.snedKeyCode(event, 0, 4);
-            });
-            backUpIcon.addEventListener('mouseup', (event) => {
-                input.snedKeyCode(event, 1, 4);
-            });
-            homeUpIcon.addEventListener('mousedown', (event) => {
-                input.snedKeyCode(event, 0, 3);
-            });
-            homeUpIcon.addEventListener('mouseup', (event) => {
-                input.snedKeyCode(event, 1, 3);
-            });
-            menuUpIcon.addEventListener('mousedown', (event) => {
-                input.snedKeyCode(event, 0, 187);
-            });
-            menuUpIcon.addEventListener('mouseup', (event) => {
-                input.snedKeyCode(event, 1, 187);
-            });
+                controlsBound = true;
+            }
         }
 
-        const parser = new VideoParser(({ type, data }) => {
+        let parser = new VideoParser(({ type, data }) => {
             if (type === 'nalu') {
-                jmuxer.feed({
-                    video: data
-                });
-            } else if (type === 'init') {
-                jmuxer.feed({
-                    video: data["sps"]
-                });
-                jmuxer.feed({
-                    video: data["pps"]
-                });
-            } else if (type === 'screen_size') {
-                initInput(data["width"], data["height"]);
-            } else if (type === 'size_change') {
-                if (input) {
-                    input.resizeScreen(data["width"], data["height"]);
+                if (jmuxerReady && jmuxer) {
+                    // 等待关键帧(IDR)再开始喂数据，避免黑屏
+                    const naluType = data[4] & 0x1f;
+                    if (awaitingKeyframe) {
+                        if (naluType === 5) { // IDR
+                            awaitingKeyframe = false;
+                            jmuxer.feed({ video: data });
+                            videoElement.play().catch(() => {});
+                        } else {
+                            return;
+                        }
+                    } else {
+                        jmuxer.feed({ video: data });
+                    }
                 }
+            } else if (type === 'init') {
+                if (jmuxerReady && jmuxer) {
+                    jmuxer.feed({ video: data["sps"] });
+                    jmuxer.feed({ video: data["pps"] });
+                    videoElement.play().catch(() => {});
+                    hasStartedStream = true;
+                } else {
+                    // 暂存，等待JMuxer准备好再喂入
+                    lastInit = data;
+                }
+            } else if (type === 'screen_size') {
+                currentScreenWidth = data["width"];
+                currentScreenHeight = data["height"];
+                updateVideoDisplay(currentScreenWidth, currentScreenHeight);
+                updateOrientationClass(currentScreenWidth, currentScreenHeight);
+                updateScreenSizeLabel(currentScreenWidth, currentScreenHeight);
+                initInput(currentScreenWidth, currentScreenHeight);
+            } else if (type === 'size_change') {
+                // 若已开始播放，视为中途分辨率变化；首启阶段不重置，避免“刚开始无画面”
+                currentScreenWidth = data["width"];
+                currentScreenHeight = data["height"];
+                if (hasStartedStream) {
+                    resetPlayer();
+                    if (!jmuxer) {
+                        jmuxer = createJMuxer();
+                    }
+                    awaitingKeyframe = true;
+                }
+                if (input) {
+                    input.resizeScreen(currentScreenWidth, currentScreenHeight);
+                }
+                updateVideoDisplay(currentScreenWidth, currentScreenHeight);
+                updateOrientationClass(currentScreenWidth, currentScreenHeight);
+                updateScreenSizeLabel(currentScreenWidth, currentScreenHeight);
             }
         });
 
         socket.on('video_data', (data) => {
-            const newData = new Uint8Array(data);
-            parser.appendData(newData);
+            try {
+                const newData = data instanceof Uint8Array ? data : new Uint8Array(data);
+                parser.appendData(newData);
+            } catch (e) {
+                console.warn('Append video data error:', e, 'typeof data:', typeof data);
+            }
         });
 
         socket.on('connect', () => {
-            document.getElementById('status').textContent = 'connected, receiving video data...';
+            showToast('已连接，正在接收视频数据...', 'success');
         });
 
-        socket.addEventListener('close', () => {
-            document.getElementById('status').textContent = 'connect closed, please refresh the page to reconnect';
+        // 使用 Socket.IO 事件
+        socket.on('disconnect', () => {
+            showToast('连接已断开，请刷新页面重新连接', 'warning');
+            showConnectionPanel();
         });
 
-        socket.addEventListener('error', (error) => {
-            document.getElementById('status').textContent = 'websocket error: ' + error.message;
+        socket.on('connect_error', (error) => {
+            showToast('连接错误: ' + (error?.message || error), 'danger');
+            showConnectionPanel();
         });
 
         window.addEventListener('beforeunload', () => {
             socket.disconnect();
+        });
+
+        // 容器尺寸变化时自适应视频显示尺寸
+        window.addEventListener('resize', () => {
+            if (currentScreenWidth && currentScreenHeight) {
+                updateVideoDisplay(currentScreenWidth, currentScreenHeight);
+            }
+        });
+
+        // 设备连接相关功能
+        const connectBtn = document.getElementById('connect-btn');
+        const deviceIpInput = document.getElementById('device-ip');
+        const devicePortInput = document.getElementById('device-port');
+        const iconContainer = document.querySelector('.icon-container');
+        const deviceListContent = document.getElementById('device-list-content');
+        
+        // 规范化与校验地址（支持IPv4与主机名）
+        function normalizeHost(input) {
+            let host = (input || '').trim();
+            // 替换常见全角或符号为英文点
+            host = host.replace(/[，、。；；\s]+/g, '.');
+            host = host.replace(/\.+/g, '.'); // 合并多余点
+            // 去除结尾的点
+            host = host.replace(/\.$/, '');
+            // 若为IPv4格式，去除每段的前导零
+            if (/^(?:\d{1,3}\.){3}\d{1,3}$/.test(host)) {
+                host = host.split('.').map(seg => String(parseInt(seg, 10))).join('.');
+            }
+            return host;
+        }
+
+        function isValidIPv4(ip) {
+            if (!/^(?:\d{1,3}\.){3}\d{1,3}$/.test(ip)) return false;
+            const parts = ip.split('.').map(n => parseInt(n, 10));
+            return parts.every(n => n >= 0 && n <= 255);
+        }
+
+        function isValidHostname(name) {
+            if (name === 'localhost') return true;
+            // RFC 1035 简化校验：标签由字母数字与中划线组成，不能以中划线开头或结尾
+            const hostnameRegex = /^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(?:\.(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?))*$/;
+            return hostnameRegex.test(name);
+        }
+
+        let currentDeviceId = null;
+
+        function updateDeviceList(devices) {
+            if (!devices || devices.length === 0) {
+                deviceListContent.innerHTML = '<div class="list-group-item py-2"><small class="text-muted">没有已连接的设备</small></div>';
+                return;
+            }
+
+            deviceListContent.innerHTML = devices.map(device => {
+                const tcpAddr = device.id; // 后端当前仅提供 id，可视为 TCP 地址
+                const deviceName = device.name || device.id; // 后端未提供名称时回退为 id
+                const statusText = `状态：${device.state}`;
+
+                const actionButtons = device.is_mirroring
+                    ? `<button class="stop-mirror-btn btn btn-danger btn-sm" data-device="${device.id}">停止镜像</button>`
+                    : `<button class="start-mirror-btn btn btn-success btn-sm" data-device="${device.id}">开始镜像</button>`;
+
+                return `
+                    <div class="list-group-item">
+                        <div class="d-flex w-100 justify-content-between align-items-center">
+                            <span class="fw-semibold">${deviceName}</span>
+                            <small class="text-muted">${statusText}</small>
+                        </div>
+                        <div class="small text-muted">TCP地址：${tcpAddr}</div>
+                        <div class="mt-2 d-flex gap-2">
+                            ${actionButtons}
+                            <button class="disconnect-btn btn btn-secondary btn-sm" data-device="${device.id}">断开连接</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // 添加事件监听
+            deviceListContent.querySelectorAll('.start-mirror-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const deviceId = btn.getAttribute('data-device');
+                    socket.emit('start_mirror', { device_id: deviceId });
+                });
+            });
+
+            deviceListContent.querySelectorAll('.stop-mirror-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const deviceId = btn.getAttribute('data-device');
+                    socket.emit('stop_mirror', { device_id: deviceId });
+                });
+            });
+
+            deviceListContent.querySelectorAll('.disconnect-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const deviceId = btn.getAttribute('data-device');
+                    // 若该设备正在镜像，先停止镜像，待停止事件回调后再断开
+                    if (currentMirroringDevice && currentMirroringDevice === deviceId) {
+                        showToast(`设备 ${deviceId} 正在镜像，先停止后断开连接...`, 'info');
+                        pendingDisconnectAfterStop.add(deviceId);
+                        socket.emit('stop_mirror', { device_id: deviceId });
+                        // 设置超时保护，若在限定时间内未收到停止事件则直接断开
+                        const timeoutMs = 5000;
+                        const t = setTimeout(() => {
+                            if (pendingDisconnectAfterStop.has(deviceId)) {
+                                showToast(`停止镜像超时，直接断开设备 ${deviceId}`, 'warning');
+                                socket.emit('disconnect_device', { device_id: deviceId });
+                                pendingDisconnectAfterStop.delete(deviceId);
+                            }
+                            pendingStopTimers.delete(deviceId);
+                        }, timeoutMs);
+                        pendingStopTimers.set(deviceId, t);
+                    } else {
+                        socket.emit('disconnect_device', { device_id: deviceId });
+                    }
+                });
+            });
+        }
+
+        function showControlPanel() {
+            iconContainer.style.display = 'flex';
+        }
+
+        function hideControlPanel() {
+            iconContainer.style.display = 'none';
+        }
+
+        // 防止未定义导致报错
+        function showConnectionPanel() {
+            hideControlPanel();
+        }
+
+        connectBtn.addEventListener('click', () => {
+            const hostRaw = deviceIpInput.value.trim();
+            const host = normalizeHost(hostRaw);
+            const portStr = devicePortInput.value.trim();
+            const port = parseInt(portStr, 10) || 5555;
+
+            if (!host) {
+                showToast('请输入设备地址（IP或域名）', 'warning');
+                return;
+            }
+            // 支持主机名或IPv4；若看起来像IPv4但不合法，则提示
+            const looksNumeric = /^([0-9]+\.)+[0-9]+$/.test(host);
+            const valid = isValidIPv4(host) || (!looksNumeric && isValidHostname(host));
+            if (!valid) {
+                showToast('地址无效，请输入有效 IPv4 或域名，例如 127.0.0.1 或 android.local', 'danger');
+                return;
+            }
+            showToast(`正在连接设备 ${host}:${port}...`, 'info');
+            socket.emit('connect_device', { ip: host, port });
+            // 不自动清空，保留便于修正输入
+        });
+
+        // 设备列表更新
+        socket.on('device_list_update', (devices) => {
+            updateDeviceList(devices);
+            showToast('设备列表已更新', 'info');
+        });
+
+        // 镜像状态事件
+        socket.on('mirror_started', (data) => {
+            showToast(`设备 ${data.device_id} 镜像已开启`, 'success');
+            currentMirroringDevice = data.device_id;  // 设置当前镜像设备
+            showControlPanel();
+            // 确保JMuxer可用
+            if (!jmuxer) {
+                jmuxer = createJMuxer();
+            }
+        });
+
+        socket.on('mirror_stopped', (data) => {
+            showToast(`设备 ${data.device_id} 镜像已停止`, 'warning');
+            currentMirroringDevice = null;  // 清除当前镜像设备
+            hideControlPanel();
+            // 重置播放器和解析器，避免残留状态影响再次启动
+            resetPlayer();
+            if (input && typeof input.destroy === 'function') {
+                input.destroy();
+                input = null;
+            }
+            hasStartedStream = false;
+            // 清理停止镜像的超时定时器
+            if (pendingStopTimers.has(data.device_id)) {
+                clearTimeout(pendingStopTimers.get(data.device_id));
+                pendingStopTimers.delete(data.device_id);
+            }
+            // 若该设备在“停止后断开”的集合中，则继续执行断开连接
+            if (pendingDisconnectAfterStop && pendingDisconnectAfterStop.has(data.device_id)) {
+                showToast(`已停止镜像，正在断开设备 ${data.device_id}...`, 'info');
+                socket.emit('disconnect_device', { device_id: data.device_id });
+                pendingDisconnectAfterStop.delete(data.device_id);
+            }
+            parser = new VideoParser(({ type, data }) => {
+                if (type === 'nalu') {
+                    if (jmuxerReady && jmuxer) {
+                        const naluType = data[4] & 0x1f;
+                        if (awaitingKeyframe) {
+                            if (naluType === 5) {
+                                awaitingKeyframe = false;
+                                jmuxer.feed({ video: data });
+                                videoElement.play().catch(() => {});
+                            } else {
+                                return;
+                            }
+                        } else {
+                            jmuxer.feed({ video: data });
+                        }
+                    }
+                } else if (type === 'init') {
+                    if (jmuxerReady && jmuxer) {
+                        jmuxer.feed({ video: data["sps"] });
+                        jmuxer.feed({ video: data["pps"] });
+                        videoElement.play().catch(() => {});
+                        hasStartedStream = true;
+                    } else {
+                        lastInit = data;
+                    }
+                } else if (type === 'screen_size') {
+                    const w = data["width"], h = data["height"];
+                    initInput(w, h);
+                    currentScreenWidth = w;
+                    currentScreenHeight = h;
+                    updateVideoDisplay(w, h);
+                    updateOrientationClass(w, h);
+                    updateScreenSizeLabel(w, h);
+                } else if (type === 'size_change') {
+                    const w = data["width"], h = data["height"];
+                    currentScreenWidth = w;
+                    currentScreenHeight = h;
+                    if (hasStartedStream) {
+                        resetPlayer();
+                        if (!jmuxer) {
+                            jmuxer = createJMuxer();
+                        }
+                        awaitingKeyframe = true;
+                    }
+                    if (input) {
+                        input.resizeScreen(w, h);
+                    }
+                    updateVideoDisplay(w, h);
+                    updateOrientationClass(w, h);
+                    updateScreenSizeLabel(w, h);
+                }
+            });
+        });
+
+        socket.on('mirror_error', (error) => {
+            showToast('镜像错误: ' + error, 'danger');
+            // 若处于“停止后断开”流程，但停止失败或异常，直接继续断开
+            if (currentMirroringDevice && pendingDisconnectAfterStop.has(currentMirroringDevice)) {
+                const deviceId = currentMirroringDevice;
+                if (pendingStopTimers.has(deviceId)) {
+                    clearTimeout(pendingStopTimers.get(deviceId));
+                    pendingStopTimers.delete(deviceId);
+                }
+                showToast(`镜像异常，直接断开设备 ${deviceId}`, 'warning');
+                socket.emit('disconnect_device', { device_id: deviceId });
+                pendingDisconnectAfterStop.delete(deviceId);
+            }
+        });
+
+        // 连接相关事件
+        socket.on('connection_error', (error) => {
+            showToast('连接失败: ' + error, 'danger');
         });
     </script>
 </body>

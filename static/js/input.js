@@ -4,12 +4,20 @@ class ScrcpyInput {
         this.width = width
         this.height = height
         this.debug = debug
+        this.videoElement = videoElement
+        // 绑定处理器引用，便于后续解绑
+        this._onMouseDown = null;
+        this._onMouseUp = null;
+        this._onMouseMove = null;
+        this._onContextMenu = null;
+        this._onWheel = null;
+        this._onKeyDown = null;
+        this._onKeyUp = null;
         let mouseX = null;
         let mouseY = null;
         let leftButtonIsPressed = false;
         let rightButtonIsPressed = false;
-
-        document.addEventListener('mousedown', (event) => {
+        this._onMouseDown = (event) => {
             const rect = videoElement.getBoundingClientRect();
             const local_x = event.clientX - rect.left;
             const local_y = event.clientY - rect.top;
@@ -30,9 +38,10 @@ class ScrcpyInput {
                     event.preventDefault();
                 }
             }
-        });
+        };
+        document.addEventListener('mousedown', this._onMouseDown);
 
-        document.addEventListener('mouseup', (event) => {
+        this._onMouseUp = (event) => {
             if (!leftButtonIsPressed) return;
 
             const rect = videoElement.getBoundingClientRect();
@@ -56,9 +65,10 @@ class ScrcpyInput {
                 this.snedKeyCode(event, 1, 4);
                 event.preventDefault();
             }
-        });
+        };
+        document.addEventListener('mouseup', this._onMouseUp);
 
-        document.addEventListener('mousemove', (event) => {
+        this._onMouseMove = (event) => {
             if (!leftButtonIsPressed) return;
 
             const rect = videoElement.getBoundingClientRect();
@@ -72,13 +82,18 @@ class ScrcpyInput {
                 let data = this.createTouchProtocolData(2, mouseX, mouseY, this.width, this.height, 0, 0, 65535);
                 this.callback(data);
             }
-        });
+        };
+        document.addEventListener('mousemove', this._onMouseMove);
 
-        videoElement.addEventListener('contextmenu', (event) => {
+        this._onContextMenu = (event) => {
             event.preventDefault();
-        });
+        };
+        videoElement.addEventListener('contextmenu', this._onContextMenu);
 
-        videoElement.addEventListener('wheel', (event) => {
+        this._onWheel = (event) => {
+            // 阻止默认滚动行为
+            event.preventDefault();
+            
             const hScroll = event.deltaX;
             const vScroll = event.deltaY;
             const deltaMode = event.deltaMode;
@@ -92,6 +107,8 @@ class ScrcpyInput {
             const relativeY = clientY - rect.top;
             const width = rect.right - rect.left;
             const height = rect.bottom - rect.top;
+
+            console.log(`Scroll event: deltaX=${hScroll}, deltaY=${vScroll}, x=${relativeX}, y=${relativeY}`);
 
             // switch (deltaMode) {
             //     case WheelEvent.DOM_DELTA_PIXEL:
@@ -108,9 +125,10 @@ class ScrcpyInput {
             // }
             let data = this.createScrollProtocolData(relativeX, relativeY, width, height, hScroll, vScroll, button);
             this.callback(data);
-        });
+        };
+        videoElement.addEventListener('wheel', this._onWheel);
 
-        videoElement.addEventListener('keydown', async (event) => {
+        this._onKeyDown = async (event) => {
             const androidKeyCode = this.mapToAndroidKeyCode(event);
             if (androidKeyCode !== null) {
                 this.snedKeyCode(event, 0, androidKeyCode)
@@ -125,16 +143,18 @@ class ScrcpyInput {
                     console.error('Failed to read clipboard contents: ', err);
                 }
             }
-        });
+        };
+        videoElement.addEventListener('keydown', this._onKeyDown);
 
-        videoElement.addEventListener('keyup', async (event) => {
+        this._onKeyUp = async (event) => {
             const androidKeyCode = this.mapToAndroidKeyCode(event);
             if (androidKeyCode !== null) {
                 this.snedKeyCode(event, 1, androidKeyCode)
             } else {
                 console.log(`key: ${event.code}, not mapped to android key code`);
             }
-        });
+        };
+        videoElement.addEventListener('keyup', this._onKeyUp);
     }
 
     resizeScreen(width, height) {
@@ -422,5 +442,21 @@ class ScrcpyInput {
         let data = null;
         data = this.createScreenProtocolData(action);
         this.callback(data)
+    }
+
+    destroy() {
+        try {
+            document.removeEventListener('mousedown', this._onMouseDown);
+            document.removeEventListener('mouseup', this._onMouseUp);
+            document.removeEventListener('mousemove', this._onMouseMove);
+            if (this.videoElement) {
+                this.videoElement.removeEventListener('contextmenu', this._onContextMenu);
+                this.videoElement.removeEventListener('wheel', this._onWheel);
+                this.videoElement.removeEventListener('keydown', this._onKeyDown);
+                this.videoElement.removeEventListener('keyup', this._onKeyUp);
+            }
+        } catch (e) {
+            console.warn('ScrcpyInput destroy error:', e);
+        }
     }
 }
